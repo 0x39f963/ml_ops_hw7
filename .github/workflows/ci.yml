@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Static smoke
+        run: python -m compileall -q app ml_pipeline.py model_gate.py
+
+      - name: Unit tests
+        run: pytest -q --maxfail=1
+
+      - name: Train smoke and model gate
+        run: |
+          python ml_pipeline.py --model-out models/model.joblib --metrics-out reports/offline_metrics.json
+          python model_gate.py --metrics reports/offline_metrics.json --policy policies/model_policy.yaml
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: offline-metrics
+          path: reports/offline_metrics.json

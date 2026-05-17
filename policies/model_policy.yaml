@@ -1,0 +1,16 @@
+offline:
+  primary_metric: accuracy
+  direction: higher_is_better
+  thresholds:
+    min_absolute: 0.90
+    min_relative_vs_baseline: 0.0
+
+online_guardrails:
+  max_p95_latency_ms: 500
+  max_error_rate: 0.01
+
+rollout:
+  strategy: blue_green
+  stable_version: v1.0.0
+  candidate_version: v1.1.0
+  rollback_on_failure: true

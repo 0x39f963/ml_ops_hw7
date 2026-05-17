@@ -1,0 +1,75 @@
+stages:
+  - validate
+  - test
+  - train
+  - package
+  - deploy_plan
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  paths:
+    - .cache/pip
+
+default:
+  image: python:3.11-slim
+  before_script:
+    - python -m pip install --upgrade pip
+
+validate:
+  stage: validate
+  script:
+    - pip install -r requirements.txt
+    - python -m compileall -q app ml_pipeline.py model_gate.py
+    - |
+      python - <<'PY'
+      import json
+      from pathlib import Path
+      required = ["Dockerfile", "docker-compose.blue.yml", "docker-compose.green.yml", "README.md"]
+      missing = [name for name in required if not Path(name).exists()]
+      if missing:
+          raise SystemExit(f"missing required files: {missing}")
+      print(json.dumps({"required_files": "ok"}, ensure_ascii=False))
+      PY
+
+unit_tests:
+  stage: test
+  script:
+    - pip install -r requirements.txt -r requirements-dev.txt
+    - pytest -q --maxfail=1
+
+train_smoke:
+  stage: train
+  script:
+    - pip install -r requirements.txt
+    - python ml_pipeline.py --model-out models/model.joblib --metrics-out reports/offline_metrics.json
+    - python model_gate.py --metrics reports/offline_metrics.json --policy policies/model_policy.yaml
+  artifacts:
+    when: always
+    paths:
+      - reports/offline_metrics.json
+    expire_in: 7 days
+
+package_manifest:
+  stage: package
+  script:
+    - mkdir -p reports
+    - printf "image=ml-ops-hw7\nstable=v1.0.0\ncandidate=v1.1.0\nstrategy=blue-green\n" > reports/deployment_manifest.txt
+    - test -f Dockerfile
+    - test -f docker-compose.blue.yml
+    - test -f docker-compose.green.yml
+  artifacts:
+    when: always
+    paths:
+      - reports/deployment_manifest.txt
+    expire_in: 7 days
+
+deploy_plan:
+  stage: deploy_plan
+  script:
+    - echo "Blue-Green deploy plan:"
+    - echo "1. run blue and green services"
+    - echo "2. smoke /health and /predict on green"
+    - echo "3. switch nginx proxy to green"
+    - echo "4. rollback via scripts/rollback_blue.sh if guardrails fail"

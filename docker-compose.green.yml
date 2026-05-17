@@ -1,0 +1,15 @@
+services:
+  ml-green:
+    build:
+      context: .
+    image: ml-ops-hw7:v1.1.0
+    container_name: ml-ops-hw7-green
+    environment:
+      MODEL_VERSION: v1.1.0
+    ports:
+      - "8002:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
